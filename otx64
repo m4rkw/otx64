@@ -1,0 +1,99 @@
+#!/usr/bin/php
+<?
+/**********************************************************************************************************
+ * otx64 v1.0 alpha                                                                                       *
+ *                                                                                                        *
+ * php script interface for dumping the 64bit sections of Mach-O binary executables.                      *
+ * by mark@wadham.me   http://github.com/m4rkw    http://twitter.com/m4rkw                                *
+ *                                                                                                        *
+ * It's possible this may need adjusting for some files.  All the Mach-O binaries I've found with x86_64  *
+ * sections are at this offset. I've no idea why, and 4096 is never reported by otool -l. Go figure.      *
+ * Use -o on the command line to specify an alternative offset.                                           *
+ **********************************************************************************************************/
+
+if ($argc<2) {
+	echo "\n::: otx64 v1.0 alpha\n\n";
+	echo "php script interface for dumping the 64bit sections of Mach-O binary executables.\n";
+	echo "bug reports to: mark@wadham.me\n\n";
+	echo "Usage: otx64 [-o <offset>] <file>\n\n";
+	echo "Default offset is 4096. This seems to be correct for all the 64-bit Mach-O binaries I can find.\n\n";
+	exit;
+}
+
+$offset = 4096;
+for ($i=1;$i<$argc;$i++) {
+	if ($argv[$i]=='-o' && ($i+1 <$argc)) {
+		$offset = $argv[$i+1];
+		$i++;
+	} else {
+		$file = $argv[$i];
+	}
+}
+
+if (!file_exists(trim(`which otool`))) {
+	echo "The 'otool' binary is not in your path.  We need this.\n";
+	exit;
+}
+
+if (!file_exists($file) || !is_file($file)) {
+	echo "File '$file' doesn't exist.\n";
+	exit;
+}
+
+if (!preg_match('/Mach-O 64-bit/',`file '$file'`)) {
+	echo "File '$file' is not a Mach-O 64-bit executable.\n";
+	exit;
+}
+
+if (!$data = @file_get_contents($file)) {
+	echo "Unable to read '$file', permissions?\n";
+	exit;
+}
+
+$ins = array();
+
+foreach (explode(chr(10),trim(`otool -tvVv '{$argv[1]}' -arch x86_64`)) as $line) {
+	if (preg_match("/^([0-9a-f]+)[\t\s]+(.*?)$/",$line,$m)) {
+		$code_offset = $m[1];
+		$m[1] = preg_replace('/^00000001/','',$m[1]);
+		$m[1] = dechex(hexdec($m[1]) + $offset);
+		$ins[] = array('code_offset' => $code_offset, 'offset' => $m[1], 'code' => $m[2]);
+	} else {
+		$ins[] = $line;
+	}
+}
+
+$offset_len = strlen($ins[count($ins)-1]['offset']);
+if ($offset_len <8) $offset_len = 8;
+
+foreach ($ins as $i => $in) {
+	if (is_array($in)) {
+		echo "0x";
+		for ($j=strlen($in['offset']);$j<$offset_len;$j++) echo '0';
+		echo $in['offset']."    ";
+
+		echo $in['code_offset']."    ";
+
+		$len = 1000;
+		for ($k=$i+1;$k<count($ins);$k++) {
+			if (is_array($ins[$k])) {
+				$len = hexdec($ins[$k]['offset']) - hexdec($in['offset']);
+				break;
+			}
+		}
+
+		$c = 0;
+		for ($j=hexdec($in['offset']);$j<hexdec($in['offset'])+$len;$j++) {
+			if ($len==1000 && ord($data[$j])==0) break;
+			$byte = dechex(ord($data[$j]));
+			if (strlen($byte)<2) $byte = '0'.$byte;
+			echo $byte;
+		}
+		for ($j=hexdec($in['offset'])+$len-hexdec($in['offset']);$j<8;$j++) echo ' ';
+
+		echo "    ".$in['code']."\n";
+	} else {
+		echo "\n$in\n\n";
+	}
+}
+?>

@@ -1,0 +1,51 @@
+
+otx64: php script interface for dumping the 64bit sections of Mach-O binary executables.
+by mark@wadham.me   http://github.com/m4rkw
+
+::: Introduction
+
+otx64 was inspired by http://otx.osxninja.com/
+
+otx is not compatible with 64-bit Mach-O binaries, which made me sad :( so i knocked up this script to 
+dump out useful asm listings with the bytecode and real file offsets from Mach-O 64-bit binaries.
+
+This is very useful for reverse engineering, hacking etc.
+
+::: What's this 4096 offset thing about then?
+
+So far all the 64-bit binaries I've found have their __text code section exactly 4096 bytes from where
+otool -l says it should be.  This is taken care off in the program with a default offset of 4096, which
+can be adjusted using the -o parameter if necessary.  If you find any 64-bit Mach-O binaries that have
+different offsets please let me know!
+
+Example, otool shows the offset of the __text section:
+
+$ otool -arch x86_64 -l file |grep __text -A5
+  sectname __text
+   segname __TEXT
+      addr 0x00002fa8
+      size 0x000422c5
+    offset 5104
+     align 2^2 (4)
+
+This means that the actual offset of the start of the code will be 5104+4096 (decimal).
+
+otx64 takes care of this adjustments so the offsets shown in left column of the output are the real
+offsets in the file that you can jump to in a hex editor to view/edit the bytecode.
+
+::: Usage
+
+Very simply just:
+
+otx64 [-o <offset>] <file>
+
+Code is split up into functional blocks similar to the otx output. The output columns are:
+
+<file offset>    <code offset>      <bytecode>       <instruction>
+
+
+Please send bug reports or suggestions to:  mark@wadham.me
+
+Follow me on twitter:  http://twitter.com/m4rkw
+
+
